@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import pickle
 from collections.abc import Iterable
 from pathlib import Path
 
-import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -33,11 +33,13 @@ def build_classifier(
 
 def save_classifier(model: Pipeline, path: str | Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, path)
+    with Path(path).open("wb") as handle:
+        pickle.dump(model, handle)
 
 
 def load_classifier(path: str | Path) -> Pipeline:
-    return joblib.load(path)
+    with Path(path).open("rb") as handle:
+        return pickle.load(handle)
 
 
 def predict_roles(model: Pipeline, texts: Iterable[str]) -> list[str]:
