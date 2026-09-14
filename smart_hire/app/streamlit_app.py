@@ -14,7 +14,11 @@ if str(PROJECT) not in sys.path:
     sys.path.insert(0, str(PROJECT))
 
 from src.parsing.resume_parser import extract_resume_text
-from src.models.recommender import match_jobs
+from src.config import MODELS_DIR, find_job_dataset, find_resume_dataset
+from src.data.load_data import load_jobs as load_jobs_file, load_resumes
+from src.features.match_features import extract_skills
+from src.models.classifier import build_classifier, load_classifier, predict_role
+from src.models.recommender import match_jobs, skill_gap_report
 
 st.set_page_config(
     page_title="SmartHire | Resume intelligence",
@@ -52,23 +56,10 @@ st.markdown(
 
 
 def load_jobs() -> pd.DataFrame:
-    relative_path = "marketing_sample_for_naukri_com-naukri_com_job_data__20201001_20201231__5k_data.csv"
-    search_roots = (PROJECT, ROOT)
-    files = [
-        file
-        for search_root in search_roots
-        for file in search_root.glob(f"{relative_path}/*.ldjson")
-    ]
-    if not files:
+    dataset = find_job_dataset()
+    if dataset is None:
         return pd.DataFrame()
-    rows = []
-    with files[0].open(encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return pd.DataFrame(rows)
+    return load_jobs_file(dataset)
 
 
 @st.cache_data(show_spinner=False)
@@ -76,7 +67,26 @@ def get_jobs() -> pd.DataFrame:
     return load_jobs()
 
 
+@st.cache_resource(show_spinner=False)
+def get_classifier():
+    artifact = MODELS_DIR / "classifier.pkl"
+    if artifact.exists() and artifact.stat().st_size > 0:
+        try:
+            return load_classifier(artifact)
+        except Exception:
+            pass
+    dataset = find_resume_dataset()
+    if dataset is None:
+        return None
+    resumes = load_resumes(dataset)
+    resumes = resumes[resumes["text"].astype(str).str.len() > 40]
+    if resumes["label"].nunique() < 2:
+        return None
+    return build_classifier(resumes["text"], resumes["label"])
+
+
 jobs = get_jobs()
+classifier = get_classifier()
 
 with st.sidebar:
     st.markdown("<div class='eyebrow'>SmartHire / 01</div>", unsafe_allow_html=True)
@@ -115,7 +125,10 @@ if not resume_text.strip():
     st.warning("The file did not contain readable text. Try exporting the resume as PDF, DOCX, or TXT.")
     st.stop()
 
-matches, predicted_role, skills = match_jobs(resume_text, jobs)
+matches, predicted_role, _ = match_jobs(resume_text, jobs, top_n=10)
+if classifier is not None:
+    predicted_role = predict_role(resume_text, classifier)
+skills = extract_skills(resume_text)
 
 st.markdown(f"<div class='eyebrow'>Analysis complete / {uploaded.name}</div>", unsafe_allow_html=True)
 metric_cols = st.columns(4)
@@ -142,6 +155,13 @@ with right:
     if skills:
         st.write("Detected skills")
         st.write(" · ".join(skills[:18]))
+    if not matches.empty:
+        st.write("Skill gap for the top match")
+        gap = skill_gap_report(resume_text, matches.iloc[0])
+        if gap["missing_skills"]:
+            st.warning("Missing: " + " · ".join(gap["missing_skills"]))
+        else:
+            st.success("No gaps detected from the supported skill vocabulary.")
     with st.expander("View extracted text"):
         st.text_area("Resume text", resume_text, height=300, label_visibility="collapsed")
 
