@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import streamlit as st
@@ -16,11 +17,35 @@ for import_root in (PROJECT, ROOT, Path.cwd(), Path.cwd() / "smart_hire"):
         sys.path.insert(0, str(import_root))
 
 from src.parsing.resume_parser import extract_resume_text
-from src.config import MODELS_DIR, find_job_dataset, find_resume_dataset
 from src.data.load_data import load_jobs as load_jobs_file, load_resumes
 from src.features.match_features import extract_skills
 from src.models.classifier import build_classifier, load_classifier, predict_role
 from src.models.recommender import match_jobs, skill_gap_report
+
+MODELS_DIR = PROJECT / "models"
+JOB_DATASET_DIRECTORY = "marketing_sample_for_naukri_com-naukri_com_job_data__20201001_20201231__5k_data.csv"
+
+
+def find_resume_dataset() -> Optional[Path]:
+    candidates = (
+        PROJECT / "data" / "raw" / "Resume.csv",
+        ROOT / "resume.csv" / "Resume" / "Resume.csv",
+        ROOT / "resume.csv" / "data" / "Resume.csv",
+    )
+    return next((path for path in candidates if path.exists()), None)
+
+
+def find_job_dataset() -> Optional[Path]:
+    candidates = (
+        PROJECT / "data" / "raw" / JOB_DATASET_DIRECTORY,
+        ROOT / JOB_DATASET_DIRECTORY,
+        PROJECT / JOB_DATASET_DIRECTORY,
+    )
+    for directory in candidates:
+        files = list(directory.glob("*.ldjson")) if directory.is_dir() else []
+        if files:
+            return files[0]
+    return None
 
 st.set_page_config(
     page_title="SmartHire | Resume intelligence",
