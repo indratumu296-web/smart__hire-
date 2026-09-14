@@ -7,11 +7,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-# The app lives in <project>/app locally and on Streamlit Cloud.
-PROJECT = Path(__file__).resolve().parents[1]
+# The app may be launched from the repository root or from the app directory.
+APP_DIR = Path(__file__).resolve().parent
+PROJECT = APP_DIR.parent
 ROOT = PROJECT.parent
-if str(PROJECT) not in sys.path:
-    sys.path.insert(0, str(PROJECT))
+for import_root in (PROJECT, ROOT, Path.cwd(), Path.cwd() / "smart_hire"):
+    if (import_root / "src" / "__init__.py").exists() and str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
 from src.parsing.resume_parser import extract_resume_text
 from src.config import MODELS_DIR, find_job_dataset, find_resume_dataset
