@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-ROOT = Path(__file__).resolve().parents[2]
-PROJECT = ROOT / "smart_hire"
+# The app lives in <project>/app locally and on Streamlit Cloud.
+PROJECT = Path(__file__).resolve().parents[1]
+ROOT = PROJECT.parent
 if str(PROJECT) not in sys.path:
     sys.path.insert(0, str(PROJECT))
 
@@ -52,7 +52,13 @@ st.markdown(
 
 
 def load_jobs() -> pd.DataFrame:
-    files = list(ROOT.glob("marketing_sample_for_naukri_com-naukri_com_job_data__20201001_20201231__5k_data.csv/*.ldjson"))
+    relative_path = "marketing_sample_for_naukri_com-naukri_com_job_data__20201001_20201231__5k_data.csv"
+    search_roots = (PROJECT, ROOT)
+    files = [
+        file
+        for search_root in search_roots
+        for file in search_root.glob(f"{relative_path}/*.ldjson")
+    ]
     if not files:
         return pd.DataFrame()
     rows = []
